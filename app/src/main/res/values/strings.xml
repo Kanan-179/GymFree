@@ -1,0 +1,7 @@
+<resources>
+    <string name="app_name">FitMəşq</string>
+    <string name="tab_program">3 Günlük Proqram</string>
+    <string name="tab_muscles">Əzələ Qrupları</string>
+    <string name="tab_history">Məşq Qeydləri</string>
+    <string name="free_badge">100% Pulsuz</string>
+</resources>

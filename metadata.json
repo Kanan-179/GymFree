@@ -1,0 +1,6 @@
+{
+  "name": "FitMəşq",
+  "description": "İdman müəllimləri üçün tələbə qeydiyyatı, günlərə görə məşq və çəki (kq) izləməsi, 3 günlük fitness proqramı və animasiyalar",
+  "requestFramePermissions": [],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}
