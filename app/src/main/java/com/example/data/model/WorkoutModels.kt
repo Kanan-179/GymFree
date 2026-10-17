@@ -174,3 +174,70 @@ data class WorkoutSessionState(
     val completedSets: Map<String, Int> = emptyMap(), // exerciseId -> completed sets count
     val elapsedSeconds: Int = 0
 )
+
+// openGym inspired Set Types
+enum class SetType(
+    val labelAz: String,
+    val shortCode: String,
+    val descriptionAz: String
+) {
+    WORKING("İşçi Set", "W", "Əsas ağır işçi seti"),
+    WARMUP("İsinmə", "WU", "Oynaq və əzələ hazırlığı seti"),
+    DROP_SET("Drop-set", "D", "Yorulmadan sonra dərhal azaldılmış çəki"),
+    FAILURE("Limit / AMRAP", "F", "Tükənənə qədər maksimum təkrar")
+}
+
+// openGym inspired Live Logged Set
+data class LoggedSet(
+    val setNumber: Int,
+    val type: SetType = SetType.WORKING,
+    val weightKg: Float = 0f,
+    val reps: Int = 10,
+    val isCompleted: Boolean = false
+)
+
+// openGym inspired Muscle Recovery Model
+enum class MuscleRecoveryStatus(
+    val titleAz: String,
+    val badgeColorHex: Long,
+    val summaryAz: String
+) {
+    FATIGUED("Yorğun / İntensiv Bərpa", 0xFFEF4444, "Zülal sintezi aktivdir, əzələ dincəlməlidir"),
+    RECOVERING("Bərpa Gedir", 0xFFF59E0B, "Glikogen bərpa olunur, 24 saat sonra hazır olacaq"),
+    OPTIMAL("Tam Hazır & Təzə", 0xFF10B981, "Super-kompensasiya pikindədir! Məşq üçün ən ideal vaxt"),
+    DETRAINED("İşlənməyib / Stimul Gözləyir", 0xFF6366F1, "Son məşqdən uzun vaxt keçib, yeni stimul tələb olunur")
+}
+
+data class MuscleRecoveryState(
+    val muscle: MuscleGroup,
+    val recoveryPercent: Int, // 0 - 100%
+    val status: MuscleRecoveryStatus,
+    val lastTrainedHoursAgo: Long?,
+    val lastTrainedTimestamp: Long?,
+    val lastTrainedDateStr: String,
+    val recommendationAz: String
+)
+
+data class BodyRecoveryAnalysis(
+    val overallReadinessScore: Int, // 0 - 100%
+    val muscleStates: List<MuscleRecoveryState>,
+    val recommendedMuscles: List<MuscleGroup>,
+    val musclesNeedingRest: List<MuscleGroup>
+)
+
+data class OneRepMaxPercentRow(
+    val percent: Int,
+    val weightKg: Float,
+    val repsTarget: String,
+    val goalTitleAz: String
+)
+
+data class OneRepMaxEstimate(
+    val inputWeightKg: Float,
+    val inputReps: Int,
+    val estimated1RmEpley: Float,
+    val estimated1RmBrzycki: Float,
+    val finalEstimated1Rm: Float,
+    val percentBreakdown: List<OneRepMaxPercentRow>
+)
+

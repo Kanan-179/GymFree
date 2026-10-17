@@ -23,13 +23,24 @@ data class ActiveWorkoutSession(
     val isRunning: Boolean = false,
     val startedTimestamp: Long = 0L,
     val elapsedSeconds: Int = 0,
-    // exerciseId -> completed sets count
+    // exerciseId -> completed sets count (legacy/quick indicator)
     val completedSets: Map<String, Int> = emptyMap(),
+    // openGym: exerciseId -> detailed logged sets (W, WU, D, F, weightKg, reps, isCompleted)
+    val loggedSetsMap: Map<String, List<com.example.data.model.LoggedSet>> = emptyMap(),
+    // openGym: superset pairs (exerciseId -> partnerExerciseId)
+    val supersetPairs: Map<String, String> = emptyMap(),
     // exerciseId -> user weight notes
     val exerciseNotes: Map<String, String> = emptyMap(),
     // Total exercises for finish calculation
-    val totalExercisesInSession: Int = 6
-)
+    val totalExercisesInSession: Int = 6,
+    // Muscle groups trained in this session
+    val targetMuscleIds: List<String> = emptyList()
+) {
+    val totalVolumeKg: Double
+        get() = loggedSetsMap.values.flatten()
+            .filter { it.isCompleted }
+            .sumOf { (it.weightKg * it.reps).toDouble() }
+}
 
 class WorkoutViewModel(application: Application) : AndroidViewModel(application) {
 
@@ -123,6 +134,23 @@ class WorkoutViewModel(application: Application) : AndroidViewModel(application)
     val totalWorkoutsCount: StateFlow<Int> = historyDao.getTotalWorkoutsCount()
         .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), 0)
 
+    // openGym Muscle Recovery and Tissue Fatigue Analysis
+    val recoveryAnalysis: StateFlow<com.example.data.model.BodyRecoveryAnalysis> = historyList
+        .map { list -> com.example.data.datasource.MuscleRecoveryEngine.analyzeRecovery(list) }
+        .stateIn(
+            viewModelScope,
+            SharingStarted.WhileSubscribed(5000),
+            com.example.data.datasource.MuscleRecoveryEngine.analyzeRecovery(emptyList())
+        )
+
+    // openGym 1RM Calculator Sheet State
+    private val _show1RmSheet = MutableStateFlow(false)
+    val show1RmSheet: StateFlow<Boolean> = _show1RmSheet.asStateFlow()
+
+    // openGym Data Export / Backup Dialog State
+    private val _showBackupDialog = MutableStateFlow(false)
+    val showBackupDialog: StateFlow<Boolean> = _showBackupDialog.asStateFlow()
+
     // Selected Day in Program (1, 2, 3)
     private val _selectedDayNumber = MutableStateFlow(1)
     val selectedDayNumber: StateFlow<Int> = _selectedDayNumber.asStateFlow()
@@ -187,7 +215,51 @@ class WorkoutViewModel(application: Application) : AndroidViewModel(application)
         _showTodaySelectionDialog.value = false
     }
 
+    fun open1RmCalculator() {
+        _show1RmSheet.value = true
+    }
+
+    fun close1RmCalculator() {
+        _show1RmSheet.value = false
+    }
+
+    fun openBackupDialog() {
+        _showBackupDialog.value = true
+    }
+
+    fun closeBackupDialog() {
+        _showBackupDialog.value = false
+    }
+
+    fun restoreBackup(jsonString: String) {
+        val parsed = com.example.util.WorkoutDataBackupUtils.parseBackupJson(jsonString)
+        if (parsed.isEmpty()) {
+            _toastNotification.value = "Format xətası: Ehtiyat nüsxə tapılmadı və ya etibarsızdır."
+            return
+        }
+        viewModelScope.launch {
+            for (item in parsed) {
+                historyDao.insertHistory(item)
+            }
+            _toastNotification.value = "Uğurla ${parsed.size} məşq qeydi bərpa olundu!"
+            _showBackupDialog.value = false
+        }
+    }
+
     fun startWorkout(day: WorkoutDay) {
+        val initialSetsMap = day.exercises.associate { ex ->
+            val setList = (1..ex.recommendedSets).map { setNum ->
+                com.example.data.model.LoggedSet(
+                    setNumber = setNum,
+                    type = if (setNum == 1) com.example.data.model.SetType.WARMUP else com.example.data.model.SetType.WORKING,
+                    weightKg = 0f,
+                    reps = 10,
+                    isCompleted = false
+                )
+            }
+            ex.id to setList
+        }
+
         _activeSession.value = ActiveWorkoutSession(
             dayNumber = day.dayNumber,
             dayTitle = day.nameAz,
@@ -195,11 +267,27 @@ class WorkoutViewModel(application: Application) : AndroidViewModel(application)
             startedTimestamp = System.currentTimeMillis(),
             elapsedSeconds = 0,
             completedSets = emptyMap(),
-            totalExercisesInSession = day.exercises.size
+            loggedSetsMap = initialSetsMap,
+            supersetPairs = emptyMap(),
+            totalExercisesInSession = day.exercises.size,
+            targetMuscleIds = day.targetMuscles.map { it.id }
         )
     }
 
     fun startRecommendedWorkout(plan: RecommendedPlan) {
+        val initialSetsMap = plan.exercises.associate { item ->
+            val setList = (1..item.sets).map { setNum ->
+                com.example.data.model.LoggedSet(
+                    setNumber = setNum,
+                    type = if (setNum == 1) com.example.data.model.SetType.WARMUP else com.example.data.model.SetType.WORKING,
+                    weightKg = 0f,
+                    reps = 10,
+                    isCompleted = false
+                )
+            }
+            item.exercise.id to setList
+        }
+
         _activeSession.value = ActiveWorkoutSession(
             dayNumber = 0, // 0 signifies custom / recommended plan
             dayTitle = plan.titleAz,
@@ -207,7 +295,10 @@ class WorkoutViewModel(application: Application) : AndroidViewModel(application)
             startedTimestamp = System.currentTimeMillis(),
             elapsedSeconds = 0,
             completedSets = emptyMap(),
-            totalExercisesInSession = plan.exercises.size
+            loggedSetsMap = initialSetsMap,
+            supersetPairs = emptyMap(),
+            totalExercisesInSession = plan.exercises.size,
+            targetMuscleIds = plan.selectedMuscles.map { it.id }
         )
     }
 
@@ -217,7 +308,19 @@ class WorkoutViewModel(application: Application) : AndroidViewModel(application)
         val newDone = if (setIndex < currentDone) setIndex else setIndex + 1
         val updatedMap = current.completedSets.toMutableMap()
         updatedMap[exerciseId] = newDone.coerceIn(0, totalSets)
-        _activeSession.value = current.copy(completedSets = updatedMap)
+
+        // Also update openGym loggedSetsMap if present
+        val currentSetList = current.loggedSetsMap[exerciseId] ?: emptyList()
+        val updatedSetList = currentSetList.mapIndexed { idx, item ->
+            if (idx < newDone) item.copy(isCompleted = true) else item.copy(isCompleted = false)
+        }
+        val updatedLoggedMap = current.loggedSetsMap.toMutableMap()
+        updatedLoggedMap[exerciseId] = updatedSetList
+
+        _activeSession.value = current.copy(
+            completedSets = updatedMap,
+            loggedSetsMap = updatedLoggedMap
+        )
 
         // Automatically offer rest timer if a set was just marked complete!
         if (newDone > currentDone) {
@@ -225,10 +328,76 @@ class WorkoutViewModel(application: Application) : AndroidViewModel(application)
         }
     }
 
+    // openGym live set logging
+    fun updateSetLog(
+        exerciseId: String,
+        setIndex: Int,
+        weightKg: Float,
+        reps: Int,
+        setType: com.example.data.model.SetType
+    ) {
+        val current = _activeSession.value ?: return
+        val sets = current.loggedSetsMap[exerciseId]?.toMutableList() ?: mutableListOf()
+        if (setIndex in sets.indices) {
+            sets[setIndex] = sets[setIndex].copy(
+                weightKg = weightKg.coerceAtLeast(0f),
+                reps = reps.coerceAtLeast(1),
+                type = setType
+            )
+            val updatedMap = current.loggedSetsMap.toMutableMap()
+            updatedMap[exerciseId] = sets
+            _activeSession.value = current.copy(loggedSetsMap = updatedMap)
+        }
+    }
+
+    fun toggleSetLoggedDone(exerciseId: String, setIndex: Int, exercise: Exercise) {
+        val current = _activeSession.value ?: return
+        val sets = current.loggedSetsMap[exerciseId]?.toMutableList() ?: mutableListOf()
+        if (setIndex in sets.indices) {
+            val oldDone = sets[setIndex].isCompleted
+            val newDone = !oldDone
+            sets[setIndex] = sets[setIndex].copy(isCompleted = newDone)
+            val updatedMap = current.loggedSetsMap.toMutableMap()
+            updatedMap[exerciseId] = sets
+
+            val completedCount = sets.count { it.isCompleted }
+            val updatedSimpleMap = current.completedSets.toMutableMap()
+            updatedSimpleMap[exerciseId] = completedCount
+
+            _activeSession.value = current.copy(
+                loggedSetsMap = updatedMap,
+                completedSets = updatedSimpleMap
+            )
+
+            if (newDone) {
+                // If this exercise is part of a superset, adjust rest timer or offer shared rest
+                val isSuperset = current.supersetPairs.containsKey(exerciseId)
+                val restTime = if (isSuperset) (exercise.restSeconds + 30) else exercise.restSeconds
+                openRestTimer(restTime)
+            }
+        }
+    }
+
+    fun toggleSupersetPair(exerciseAId: String, exerciseBId: String) {
+        val current = _activeSession.value ?: return
+        val pairs = current.supersetPairs.toMutableMap()
+        if (pairs[exerciseAId] == exerciseBId) {
+            pairs.remove(exerciseAId)
+            pairs.remove(exerciseBId)
+        } else {
+            pairs[exerciseAId] = exerciseBId
+            pairs[exerciseBId] = exerciseAId
+        }
+        _activeSession.value = current.copy(supersetPairs = pairs)
+    }
+
     fun finishWorkout(notes: String = "") {
         val session = _activeSession.value ?: return
         val totalExercises = session.totalExercisesInSession.coerceAtLeast(1)
         val completedCount = session.completedSets.values.count { it > 0 }
+        val volume = session.totalVolumeKg
+
+        val musclesJson = org.json.JSONArray(session.targetMuscleIds).toString()
 
         viewModelScope.launch {
             historyDao.insertHistory(
@@ -238,10 +407,13 @@ class WorkoutViewModel(application: Application) : AndroidViewModel(application)
                     durationSeconds = session.elapsedSeconds.coerceAtLeast(60),
                     completedExercisesCount = completedCount,
                     totalExercisesCount = totalExercises,
-                    notes = notes
+                    notes = notes,
+                    totalVolumeKg = volume,
+                    trainedMusclesJson = musclesJson
                 )
             )
-            _completedBannerMessage.value = "${session.dayTitle} uğurla tamamlandı və yadda saxlanıldı!"
+            val volumeStr = if (volume > 0) " • Ümumi Tonaj: ${volume.toInt()} kq" else ""
+            _completedBannerMessage.value = "${session.dayTitle} uğurla tamamlandı və yadda saxlanıldı!$volumeStr"
             _activeSession.value = null
         }
     }

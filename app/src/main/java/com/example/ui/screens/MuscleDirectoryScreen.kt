@@ -20,17 +20,22 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.example.data.datasource.FitnessData
+import com.example.data.model.BodyRecoveryAnalysis
 import com.example.data.model.Exercise
 import com.example.data.model.MuscleGroup
 import com.example.ui.components.MuscleGroupSelectorRow
+import com.example.ui.components.MuscleRecoveryView
 import com.example.ui.theme.*
 
 @Composable
 fun MuscleDirectoryScreen(
     selectedMuscle: MuscleGroup,
     onSelectMuscle: (MuscleGroup) -> Unit,
-    onInspectExercise: (Exercise) -> Unit
+    onInspectExercise: (Exercise) -> Unit,
+    recoveryAnalysis: BodyRecoveryAnalysis? = null,
+    onStartWorkoutWithMuscles: ((Set<MuscleGroup>) -> Unit)? = null
 ) {
+    var subTab by remember { mutableIntStateOf(0) } // 0: Kataloq, 1: openGym Bərpa
     var searchQuery by remember { mutableStateOf("") }
 
     val exercisesForMuscle = remember(selectedMuscle, searchQuery) {
@@ -39,30 +44,102 @@ fun MuscleDirectoryScreen(
         else list.filter { it.nameAz.contains(searchQuery, ignoreCase = true) || it.equipment.contains(searchQuery, ignoreCase = true) }
     }
 
-    LazyColumn(
-        modifier = Modifier
-            .fillMaxSize()
-            .testTag("muscle_directory_screen"),
-        contentPadding = PaddingValues(16.dp),
-        verticalArrangement = Arrangement.spacedBy(16.dp)
-    ) {
-        // Top Header
-        item {
-            Column {
-                Text(
-                    text = "Əzələ Qrupları & Hərəkətlər",
-                    color = TextPrimary,
-                    fontSize = 22.sp,
-                    fontWeight = FontWeight.Black
-                )
-                Spacer(modifier = Modifier.height(4.dp))
-                Text(
-                    text = "İstədiyiniz əzələni seçin və onu ən çox inkişaf etdirən hərəkətləri animasiyalı şəkildə öyrənin.",
-                    color = TextSecondary,
-                    fontSize = 13.sp
-                )
+    Column(modifier = Modifier.fillMaxSize()) {
+        // openGym Inspired Mode Switcher (Kataloq vs Bədən Bərpası)
+        Surface(
+            modifier = Modifier.fillMaxWidth(),
+            color = DarkSurface
+        ) {
+            Row(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(horizontal = 16.dp, vertical = 8.dp),
+                horizontalArrangement = Arrangement.spacedBy(8.dp)
+            ) {
+                FilledTonalButton(
+                    onClick = { subTab = 0 },
+                    modifier = Modifier.weight(1f),
+                    shape = RoundedCornerShape(12.dp),
+                    colors = ButtonDefaults.filledTonalButtonColors(
+                        containerColor = if (subTab == 0) CyanPrimary else DarkSurfaceVariant
+                    )
+                ) {
+                    Icon(
+                        imageVector = Icons.Default.MenuBook,
+                        contentDescription = null,
+                        modifier = Modifier.size(16.dp),
+                        tint = if (subTab == 0) Color.Black else TextPrimary
+                    )
+                    Spacer(modifier = Modifier.width(6.dp))
+                    Text(
+                        text = "Hərəkət Kataloqu",
+                        fontSize = 12.sp,
+                        fontWeight = FontWeight.Bold,
+                        color = if (subTab == 0) Color.Black else TextPrimary
+                    )
+                }
+
+                FilledTonalButton(
+                    onClick = { subTab = 1 },
+                    modifier = Modifier.weight(1f),
+                    shape = RoundedCornerShape(12.dp),
+                    colors = ButtonDefaults.filledTonalButtonColors(
+                        containerColor = if (subTab == 1) OrangeAccent else DarkSurfaceVariant
+                    )
+                ) {
+                    Icon(
+                        imageVector = Icons.Default.HealthAndSafety,
+                        contentDescription = null,
+                        modifier = Modifier.size(16.dp),
+                        tint = if (subTab == 1) Color.Black else TextPrimary
+                    )
+                    Spacer(modifier = Modifier.width(6.dp))
+                    Text(
+                        text = "openGym Bərpa",
+                        fontSize = 12.sp,
+                        fontWeight = FontWeight.Bold,
+                        color = if (subTab == 1) Color.Black else TextPrimary
+                    )
+                }
             }
         }
+
+        if (subTab == 1 && recoveryAnalysis != null) {
+            MuscleRecoveryView(
+                recoveryAnalysis = recoveryAnalysis,
+                onStartWorkoutWithMuscles = { muscles ->
+                    onStartWorkoutWithMuscles?.invoke(muscles)
+                },
+                onSelectMuscleForCatalog = { muscle ->
+                    onSelectMuscle(muscle)
+                    subTab = 0
+                }
+            )
+        } else {
+            LazyColumn(
+                modifier = Modifier
+                    .fillMaxSize()
+                    .testTag("muscle_directory_screen"),
+                contentPadding = PaddingValues(16.dp),
+                verticalArrangement = Arrangement.spacedBy(16.dp)
+            ) {
+                // Top Header
+                item {
+                    Column {
+                        Text(
+                            text = "Əzələ Qrupları & Hərəkətlər",
+                            color = TextPrimary,
+                            fontSize = 22.sp,
+                            fontWeight = FontWeight.Black
+                        )
+                        Spacer(modifier = Modifier.height(4.dp))
+                        Text(
+                            text = "İstədiyiniz əzələni seçin və onu ən çox inkişaf etdirən hərəkətləri animasiyalı şəkildə öyrənin.",
+                            color = TextSecondary,
+                            fontSize = 13.sp
+                        )
+                    }
+                }
 
         // Muscle Selection Row (Sinə, Çiyin, Kürək, Biceps, Triceps, Abs, Ayaq)
         item {
@@ -325,3 +402,8 @@ fun MuscleDirectoryScreen(
         }
     }
 }
+}
+}
+
+
+

@@ -26,7 +26,9 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.lifecycle.viewmodel.compose.viewModel
+import com.example.ui.components.DataBackupDialog
 import com.example.ui.components.ExerciseDetailSheet
+import com.example.ui.components.OneRepMaxCalculatorSheet
 import com.example.ui.components.RestTimerDialog
 import com.example.ui.components.TodayMuscleSelectionDialog
 import com.example.ui.screens.HistoryScreen
@@ -66,6 +68,9 @@ fun FitnessAppMain(
     val todayMuscles by viewModel.todayMuscles.collectAsStateWithLifecycle()
     val recommendedPlan by viewModel.recommendedPlan.collectAsStateWithLifecycle()
     val showTodaySelectionDialog by viewModel.showTodaySelectionDialog.collectAsStateWithLifecycle()
+    val recoveryAnalysis by viewModel.recoveryAnalysis.collectAsStateWithLifecycle()
+    val show1RmSheet by viewModel.show1RmSheet.collectAsStateWithLifecycle()
+    val showBackupDialog by viewModel.showBackupDialog.collectAsStateWithLifecycle()
 
     // Trainer / Student States
     val students by viewModel.students.collectAsStateWithLifecycle()
@@ -156,6 +161,30 @@ fun FitnessAppMain(
                             imageVector = Icons.Default.Timer,
                             contentDescription = "İstirahət Taymeri",
                             tint = TextSecondary
+                        )
+                    }
+
+                    // openGym 1RM Calculator trigger
+                    IconButton(
+                        onClick = { viewModel.open1RmCalculator() },
+                        modifier = Modifier.testTag("top_1rm_btn")
+                    ) {
+                        Icon(
+                            imageVector = Icons.Default.Calculate,
+                            contentDescription = "1RM Güc Hesablayıcı",
+                            tint = OrangeAccent
+                        )
+                    }
+
+                    // openGym Data Export / Restore trigger
+                    IconButton(
+                        onClick = { viewModel.openBackupDialog() },
+                        modifier = Modifier.testTag("top_backup_btn")
+                    ) {
+                        Icon(
+                            imageVector = Icons.Default.CloudSync,
+                            contentDescription = "Ehtiyat Nüsxə / İxrac",
+                            tint = LimeSuccess
                         )
                     }
                 },
@@ -313,17 +342,27 @@ fun FitnessAppMain(
                     onCancelWorkout = { viewModel.cancelActiveWorkout() },
                     onToggleSet = { exId, setIdx, total -> viewModel.toggleSetCompletion(exId, setIdx, total) },
                     onDismissBanner = { viewModel.dismissCompletedBanner() },
-                    onOpenTimer = { viewModel.openRestTimer(60) }
+                    onOpenTimer = { viewModel.openRestTimer(60) },
+                    onUpdateSetLog = { exId, setIdx, w, r, type -> viewModel.updateSetLog(exId, setIdx, w, r, type) },
+                    onToggleSetLoggedDone = { exId, setIdx, ex -> viewModel.toggleSetLoggedDone(exId, setIdx, ex) },
+                    onToggleSuperset = { a, b -> viewModel.toggleSupersetPair(a, b) },
+                    onOpen1RmCalculator = { viewModel.open1RmCalculator() }
                 )
                 2 -> MuscleDirectoryScreen(
                     selectedMuscle = selectedMuscle,
                     onSelectMuscle = { viewModel.selectMuscle(it) },
-                    onInspectExercise = { viewModel.inspectExercise(it) }
+                    onInspectExercise = { viewModel.inspectExercise(it) },
+                    recoveryAnalysis = recoveryAnalysis,
+                    onStartWorkoutWithMuscles = { muscles ->
+                        viewModel.applyTodayMuscles(muscles)
+                        selectedTab = 1
+                    }
                 )
                 3 -> HistoryScreen(
                     historyList = historyList,
                     totalCount = totalWorkoutsCount,
-                    onDeleteHistory = { viewModel.deleteHistoryItem(it) }
+                    onDeleteHistory = { viewModel.deleteHistoryItem(it) },
+                    onOpenBackupDialog = { viewModel.openBackupDialog() }
                 )
             }
         }
@@ -356,6 +395,22 @@ fun FitnessAppMain(
         RestTimerDialog(
             initialSeconds = seconds,
             onDismiss = { viewModel.closeRestTimer() }
+        )
+    }
+
+    // openGym 1RM Strength Calculator Sheet
+    if (show1RmSheet) {
+        OneRepMaxCalculatorSheet(
+            onDismiss = { viewModel.close1RmCalculator() }
+        )
+    }
+
+    // openGym Data Export & Restore Dialog
+    if (showBackupDialog) {
+        DataBackupDialog(
+            historyList = historyList,
+            onDismiss = { viewModel.closeBackupDialog() },
+            onRestoreBackup = { json -> viewModel.restoreBackup(json) }
         )
     }
 }

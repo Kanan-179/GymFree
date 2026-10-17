@@ -28,7 +28,9 @@ import com.example.data.datasource.FitnessData
 import com.example.data.datasource.RecommendedPlan
 import com.example.data.model.Exercise
 import com.example.data.model.MuscleGroup
+import com.example.data.model.SetType
 import com.example.data.model.WorkoutDay
+import com.example.ui.components.OpenGymSetLoggingTable
 import com.example.ui.theme.*
 import com.example.ui.viewmodel.ActiveWorkoutSession
 
@@ -53,7 +55,11 @@ fun ProgramScreen(
     onCancelWorkout: () -> Unit,
     onToggleSet: (String, Int, Int) -> Unit,
     onDismissBanner: () -> Unit,
-    onOpenTimer: () -> Unit
+    onOpenTimer: () -> Unit,
+    onUpdateSetLog: ((String, Int, Float, Int, SetType) -> Unit)? = null,
+    onToggleSetLoggedDone: ((String, Int, Exercise) -> Unit)? = null,
+    onToggleSuperset: ((String, String) -> Unit)? = null,
+    onOpen1RmCalculator: (() -> Unit)? = null
 ) {
     var displayMode by remember { mutableStateOf(ProgramDisplayMode.TODAY_RECOMMENDED) }
 
@@ -372,6 +378,55 @@ fun ProgramScreen(
                                     Text("Məşqi Tamamla", color = Color.Black, fontWeight = FontWeight.Bold)
                                 }
                             }
+
+                            // openGym Live Session Volume & 1RM Bar
+                            Spacer(modifier = Modifier.height(10.dp))
+                            Surface(
+                                shape = RoundedCornerShape(10.dp),
+                                color = DarkSurfaceElevated,
+                                modifier = Modifier.fillMaxWidth()
+                            ) {
+                                Row(
+                                    modifier = Modifier
+                                        .fillMaxWidth()
+                                        .padding(horizontal = 12.dp, vertical = 8.dp),
+                                    horizontalArrangement = Arrangement.SpaceBetween,
+                                    verticalAlignment = Alignment.CenterVertically
+                                ) {
+                                    Row(verticalAlignment = Alignment.CenterVertically) {
+                                        Icon(Icons.Default.FitnessCenter, contentDescription = null, tint = LimeSuccess, modifier = Modifier.size(16.dp))
+                                        Spacer(modifier = Modifier.width(6.dp))
+                                        Text(
+                                            text = "Canlı Tonaj: ${activeSession?.totalVolumeKg?.toInt() ?: 0} kq",
+                                            color = LimeSuccess,
+                                            fontSize = 12.sp,
+                                            fontWeight = FontWeight.Bold
+                                        )
+                                    }
+
+                                    Row(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+                                        onOpen1RmCalculator?.let { open1Rm ->
+                                            TextButton(
+                                                onClick = open1Rm,
+                                                contentPadding = PaddingValues(horizontal = 6.dp, vertical = 2.dp)
+                                            ) {
+                                                Icon(Icons.Default.Calculate, contentDescription = null, tint = OrangeAccent, modifier = Modifier.size(14.dp))
+                                                Spacer(modifier = Modifier.width(4.dp))
+                                                Text("1RM", color = OrangeAccent, fontSize = 11.sp, fontWeight = FontWeight.Bold)
+                                            }
+                                        }
+
+                                        TextButton(
+                                            onClick = onOpenTimer,
+                                            contentPadding = PaddingValues(horizontal = 6.dp, vertical = 2.dp)
+                                        ) {
+                                            Icon(Icons.Default.Timer, contentDescription = null, tint = CyanPrimary, modifier = Modifier.size(14.dp))
+                                            Spacer(modifier = Modifier.width(4.dp))
+                                            Text("Taymer", color = CyanPrimary, fontSize = 11.sp, fontWeight = FontWeight.Bold)
+                                        }
+                                    }
+                                }
+                            }
                         }
                     }
                 }
@@ -508,57 +563,28 @@ fun ProgramScreen(
                         }
 
                         // Interactive Live Set Checkers when recommended session is active
-                        if (isRecommendedSessionActive) {
-                            Spacer(modifier = Modifier.height(12.dp))
-                            Divider(color = DarkSurfaceElevated, thickness = 1.dp)
-                            Spacer(modifier = Modifier.height(10.dp))
-
-                            Text(
-                                text = "Setləri Qeyd Et ($completedSets/${exercise.recommendedSets} bitdi):",
-                                color = TextSecondary,
-                                fontSize = 12.sp,
-                                fontWeight = FontWeight.Medium
-                            )
-                            Spacer(modifier = Modifier.height(8.dp))
-
-                            Row(
-                                horizontalArrangement = Arrangement.spacedBy(8.dp),
-                                modifier = Modifier.fillMaxWidth()
-                            ) {
-                                for (setIdx in 0 until exercise.recommendedSets) {
-                                    val isDone = setIdx < completedSets
-                                    Surface(
-                                        shape = RoundedCornerShape(8.dp),
-                                        color = if (isDone) LimeSuccess else DarkSurfaceElevated,
-                                        modifier = Modifier
-                                            .weight(1f)
-                                            .clickable {
-                                                onToggleSet(exercise.id, setIdx, exercise.recommendedSets)
-                                            }
-                                            .testTag("rec_set_btn_${exercise.id}_$setIdx")
-                                    ) {
-                                        Row(
-                                            modifier = Modifier.padding(vertical = 8.dp),
-                                            horizontalArrangement = Arrangement.Center,
-                                            verticalAlignment = Alignment.CenterVertically
-                                        ) {
-                                            Icon(
-                                                imageVector = if (isDone) Icons.Default.Check else Icons.Default.FitnessCenter,
-                                                contentDescription = null,
-                                                tint = if (isDone) Color.Black else TextSecondary,
-                                                modifier = Modifier.size(14.dp)
-                                            )
-                                            Spacer(modifier = Modifier.width(4.dp))
-                                            Text(
-                                                text = "Set ${setIdx + 1}",
-                                                color = if (isDone) Color.Black else TextPrimary,
-                                                fontSize = 12.sp,
-                                                fontWeight = if (isDone) FontWeight.Bold else FontWeight.Normal
-                                            )
-                                        }
+                        if (isRecommendedSessionActive && activeSession != null) {
+                            OpenGymSetLoggingTable(
+                                exercise = exercise,
+                                activeSession = activeSession,
+                                allExercisesInDay = recommendedPlan.exercises.map { it.exercise },
+                                onUpdateSetLog = { exId, setIdx, w, r, type ->
+                                    onUpdateSetLog?.invoke(exId, setIdx, w, r, type)
+                                },
+                                onToggleSetDone = { exId, setIdx, ex ->
+                                    if (onToggleSetLoggedDone != null) {
+                                        onToggleSetLoggedDone(exId, setIdx, ex)
+                                    } else {
+                                        onToggleSet(exId, setIdx, ex.recommendedSets)
                                     }
+                                },
+                                onToggleSuperset = { a, b ->
+                                    onToggleSuperset?.invoke(a, b)
+                                },
+                                onOpen1RmCalculator = {
+                                    onOpen1RmCalculator?.invoke()
                                 }
-                            }
+                            )
                         }
                     }
                 }
@@ -729,6 +755,55 @@ fun ProgramScreen(
                                 Text("Məşqi Tamamla", color = Color.Black, fontWeight = FontWeight.Bold)
                             }
                         }
+
+                        // openGym Live Session Volume & 1RM Bar for 3-Day Program
+                        Spacer(modifier = Modifier.height(10.dp))
+                        Surface(
+                            shape = RoundedCornerShape(10.dp),
+                            color = DarkSurfaceElevated,
+                            modifier = Modifier.fillMaxWidth()
+                        ) {
+                            Row(
+                                modifier = Modifier
+                                    .fillMaxWidth()
+                                    .padding(horizontal = 12.dp, vertical = 8.dp),
+                                horizontalArrangement = Arrangement.SpaceBetween,
+                                verticalAlignment = Alignment.CenterVertically
+                            ) {
+                                Row(verticalAlignment = Alignment.CenterVertically) {
+                                    Icon(Icons.Default.FitnessCenter, contentDescription = null, tint = LimeSuccess, modifier = Modifier.size(16.dp))
+                                    Spacer(modifier = Modifier.width(6.dp))
+                                    Text(
+                                        text = "Canlı Tonaj: ${activeSession?.totalVolumeKg?.toInt() ?: 0} kq",
+                                        color = LimeSuccess,
+                                        fontSize = 12.sp,
+                                        fontWeight = FontWeight.Bold
+                                    )
+                                }
+
+                                Row(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+                                    onOpen1RmCalculator?.let { open1Rm ->
+                                        TextButton(
+                                            onClick = open1Rm,
+                                            contentPadding = PaddingValues(horizontal = 6.dp, vertical = 2.dp)
+                                        ) {
+                                            Icon(Icons.Default.Calculate, contentDescription = null, tint = OrangeAccent, modifier = Modifier.size(14.dp))
+                                            Spacer(modifier = Modifier.width(4.dp))
+                                            Text("1RM", color = OrangeAccent, fontSize = 11.sp, fontWeight = FontWeight.Bold)
+                                        }
+                                    }
+
+                                    TextButton(
+                                        onClick = onOpenTimer,
+                                        contentPadding = PaddingValues(horizontal = 6.dp, vertical = 2.dp)
+                                    ) {
+                                        Icon(Icons.Default.Timer, contentDescription = null, tint = CyanPrimary, modifier = Modifier.size(14.dp))
+                                        Spacer(modifier = Modifier.width(4.dp))
+                                        Text("Taymer", color = CyanPrimary, fontSize = 11.sp, fontWeight = FontWeight.Bold)
+                                    }
+                                }
+                            }
+                        }
                     }
                 }
             }
@@ -835,57 +910,28 @@ fun ProgramScreen(
                     )
 
                     // Interactive Live Set Checkers when workout is active
-                    if (isCurrentDayActive) {
-                        Spacer(modifier = Modifier.height(12.dp))
-                        Divider(color = DarkSurfaceElevated, thickness = 1.dp)
-                        Spacer(modifier = Modifier.height(10.dp))
-
-                        Text(
-                            text = "Setləri Qeyd Et ($completedSets/${exercise.recommendedSets} bitdi):",
-                            color = TextSecondary,
-                            fontSize = 12.sp,
-                            fontWeight = FontWeight.Medium
-                        )
-                        Spacer(modifier = Modifier.height(8.dp))
-
-                        Row(
-                            horizontalArrangement = Arrangement.spacedBy(8.dp),
-                            modifier = Modifier.fillMaxWidth()
-                        ) {
-                            for (setIdx in 0 until exercise.recommendedSets) {
-                                val isDone = setIdx < completedSets
-                                Surface(
-                                    shape = RoundedCornerShape(8.dp),
-                                    color = if (isDone) LimeSuccess else DarkSurfaceElevated,
-                                    modifier = Modifier
-                                        .weight(1f)
-                                        .clickable {
-                                            onToggleSet(exercise.id, setIdx, exercise.recommendedSets)
-                                        }
-                                        .testTag("set_btn_${exercise.id}_$setIdx")
-                                ) {
-                                    Row(
-                                        modifier = Modifier.padding(vertical = 8.dp),
-                                        horizontalArrangement = Arrangement.Center,
-                                        verticalAlignment = Alignment.CenterVertically
-                                    ) {
-                                        Icon(
-                                            imageVector = if (isDone) Icons.Default.Check else Icons.Default.FitnessCenter,
-                                            contentDescription = null,
-                                            tint = if (isDone) Color.Black else TextSecondary,
-                                            modifier = Modifier.size(14.dp)
-                                        )
-                                        Spacer(modifier = Modifier.width(4.dp))
-                                        Text(
-                                            text = "Set ${setIdx + 1}",
-                                            color = if (isDone) Color.Black else TextPrimary,
-                                            fontSize = 12.sp,
-                                            fontWeight = if (isDone) FontWeight.Bold else FontWeight.Normal
-                                        )
-                                    }
+                    if (isCurrentDayActive && activeSession != null) {
+                        OpenGymSetLoggingTable(
+                            exercise = exercise,
+                            activeSession = activeSession,
+                            allExercisesInDay = currentDay.exercises,
+                            onUpdateSetLog = { exId, setIdx, w, r, type ->
+                                onUpdateSetLog?.invoke(exId, setIdx, w, r, type)
+                            },
+                            onToggleSetDone = { exId, setIdx, ex ->
+                                if (onToggleSetLoggedDone != null) {
+                                    onToggleSetLoggedDone(exId, setIdx, ex)
+                                } else {
+                                    onToggleSet(exId, setIdx, ex.recommendedSets)
                                 }
+                            },
+                            onToggleSuperset = { a, b ->
+                                onToggleSuperset?.invoke(a, b)
+                            },
+                            onOpen1RmCalculator = {
+                                onOpen1RmCalculator?.invoke()
                             }
-                        }
+                        )
                     }
                 }
             }

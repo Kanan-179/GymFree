@@ -26,9 +26,11 @@ import java.util.*
 fun HistoryScreen(
     historyList: List<WorkoutHistoryEntity>,
     totalCount: Int,
-    onDeleteHistory: (Long) -> Unit
+    onDeleteHistory: (Long) -> Unit,
+    onOpenBackupDialog: (() -> Unit)? = null
 ) {
     val dateFormat = SimpleDateFormat("dd MMMM yyyy, HH:mm", Locale("az"))
+    val totalTonnage = historyList.sumOf { it.totalVolumeKg }
 
     LazyColumn(
         modifier = Modifier
@@ -39,27 +41,46 @@ fun HistoryScreen(
     ) {
         // Top Header
         item {
-            Column {
-                Text(
-                    text = "Məşq Gündəliyi & Nailiyyətlər",
-                    color = TextPrimary,
-                    fontSize = 22.sp,
-                    fontWeight = FontWeight.Black
-                )
-                Spacer(modifier = Modifier.height(4.dp))
-                Text(
-                    text = "Həftəlik 3 günlük hədəfinizə çatmağınızı və idman tarixçənizi izləyin.",
-                    color = TextSecondary,
-                    fontSize = 13.sp
-                )
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.SpaceBetween,
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                Column(modifier = Modifier.weight(1f)) {
+                    Text(
+                        text = "Məşq Gündəliyi & Nailiyyətlər",
+                        color = TextPrimary,
+                        fontSize = 22.sp,
+                        fontWeight = FontWeight.Black
+                    )
+                    Spacer(modifier = Modifier.height(4.dp))
+                    Text(
+                        text = "openGym qeydləri, ümumi qaldırılan tonaj və məşq statistikası.",
+                        color = TextSecondary,
+                        fontSize = 13.sp
+                    )
+                }
+
+                onOpenBackupDialog?.let { openBackup ->
+                    FilledTonalButton(
+                        onClick = openBackup,
+                        shape = RoundedCornerShape(12.dp),
+                        colors = ButtonDefaults.filledTonalButtonColors(containerColor = CyanPrimary.copy(alpha = 0.2f)),
+                        contentPadding = PaddingValues(horizontal = 10.dp, vertical = 6.dp)
+                    ) {
+                        Icon(Icons.Default.CloudSync, contentDescription = null, tint = CyanPrimary, modifier = Modifier.size(16.dp))
+                        Spacer(modifier = Modifier.width(4.dp))
+                        Text("İxrac / Bərpa", fontSize = 11.sp, fontWeight = FontWeight.Bold, color = CyanPrimary)
+                    }
+                }
             }
         }
 
-        // Summary Stats Row
+        // Summary Stats Row (3 Cards: Workouts, Goal, Total Volume)
         item {
             Row(
                 modifier = Modifier.fillMaxWidth(),
-                horizontalArrangement = Arrangement.spacedBy(12.dp)
+                horizontalArrangement = Arrangement.spacedBy(10.dp)
             ) {
                 Card(
                     modifier = Modifier.weight(1f),
@@ -67,21 +88,21 @@ fun HistoryScreen(
                     colors = CardDefaults.cardColors(containerColor = DarkSurfaceVariant)
                 ) {
                     Column(
-                        modifier = Modifier.padding(16.dp),
+                        modifier = Modifier.padding(14.dp),
                         horizontalAlignment = Alignment.CenterHorizontally
                     ) {
-                        Icon(Icons.Default.EmojiEvents, contentDescription = null, tint = OrangeAccent, modifier = Modifier.size(28.dp))
-                        Spacer(modifier = Modifier.height(6.dp))
+                        Icon(Icons.Default.EmojiEvents, contentDescription = null, tint = OrangeAccent, modifier = Modifier.size(24.dp))
+                        Spacer(modifier = Modifier.height(4.dp))
                         Text(
                             text = "$totalCount",
                             color = TextPrimary,
-                            fontSize = 24.sp,
+                            fontSize = 20.sp,
                             fontWeight = FontWeight.Black
                         )
                         Text(
                             text = "Bitən Məşq",
                             color = TextSecondary,
-                            fontSize = 12.sp
+                            fontSize = 11.sp
                         )
                     }
                 }
@@ -92,22 +113,48 @@ fun HistoryScreen(
                     colors = CardDefaults.cardColors(containerColor = DarkSurfaceVariant)
                 ) {
                     Column(
-                        modifier = Modifier.padding(16.dp),
+                        modifier = Modifier.padding(14.dp),
                         horizontalAlignment = Alignment.CenterHorizontally
                     ) {
-                        Icon(Icons.Default.Whatshot, contentDescription = null, tint = LimeSuccess, modifier = Modifier.size(28.dp))
-                        Spacer(modifier = Modifier.height(6.dp))
+                        Icon(Icons.Default.Whatshot, contentDescription = null, tint = LimeSuccess, modifier = Modifier.size(24.dp))
+                        Spacer(modifier = Modifier.height(4.dp))
                         val weeklyProgress = (totalCount % 3).coerceIn(0, 3)
                         Text(
                             text = "$weeklyProgress / 3",
                             color = TextPrimary,
-                            fontSize = 24.sp,
+                            fontSize = 20.sp,
                             fontWeight = FontWeight.Black
                         )
                         Text(
-                            text = "Bu Həftəki Hədəf",
+                            text = "Bu Həftə",
                             color = TextSecondary,
-                            fontSize = 12.sp
+                            fontSize = 11.sp
+                        )
+                    }
+                }
+
+                Card(
+                    modifier = Modifier.weight(1f),
+                    shape = RoundedCornerShape(18.dp),
+                    colors = CardDefaults.cardColors(containerColor = DarkSurfaceVariant)
+                ) {
+                    Column(
+                        modifier = Modifier.padding(14.dp),
+                        horizontalAlignment = Alignment.CenterHorizontally
+                    ) {
+                        Icon(Icons.Default.FitnessCenter, contentDescription = null, tint = CyanPrimary, modifier = Modifier.size(24.dp))
+                        Spacer(modifier = Modifier.height(4.dp))
+                        val tonnageK = if (totalTonnage >= 1000) "${(totalTonnage / 1000).toInt()}k" else "${totalTonnage.toInt()}"
+                        Text(
+                            text = "$tonnageK kq",
+                            color = CyanPrimary,
+                            fontSize = 20.sp,
+                            fontWeight = FontWeight.Black
+                        )
+                        Text(
+                            text = "Ümumi Tonaj",
+                            color = TextSecondary,
+                            fontSize = 11.sp
                         )
                     }
                 }
@@ -221,7 +268,8 @@ fun HistoryScreen(
 
                         Row(
                             modifier = Modifier.fillMaxWidth(),
-                            horizontalArrangement = Arrangement.SpaceBetween
+                            horizontalArrangement = Arrangement.SpaceBetween,
+                            verticalAlignment = Alignment.CenterVertically
                         ) {
                             Text(
                                 text = "İcra: ${item.completedExercisesCount} / ${item.totalExercisesCount} Hərəkət",
@@ -234,6 +282,37 @@ fun HistoryScreen(
                                 color = CyanPrimary,
                                 fontSize = 12.sp,
                                 fontWeight = FontWeight.SemiBold
+                            )
+                        }
+
+                        if (item.totalVolumeKg > 0) {
+                            Spacer(modifier = Modifier.height(8.dp))
+                            Surface(
+                                shape = RoundedCornerShape(6.dp),
+                                color = LimeSuccess.copy(alpha = 0.15f)
+                            ) {
+                                Row(
+                                    modifier = Modifier.padding(horizontal = 8.dp, vertical = 4.dp),
+                                    verticalAlignment = Alignment.CenterVertically
+                                ) {
+                                    Icon(Icons.Default.FitnessCenter, contentDescription = null, tint = LimeSuccess, modifier = Modifier.size(14.dp))
+                                    Spacer(modifier = Modifier.width(4.dp))
+                                    Text(
+                                        text = "Ümumi Tonaj: ${item.totalVolumeKg.toInt()} kq",
+                                        color = LimeSuccess,
+                                        fontSize = 11.sp,
+                                        fontWeight = FontWeight.Bold
+                                    )
+                                }
+                            }
+                        }
+
+                        if (item.notes.isNotBlank()) {
+                            Spacer(modifier = Modifier.height(6.dp))
+                            Text(
+                                text = "Qeyd: ${item.notes}",
+                                color = TextMuted,
+                                fontSize = 11.sp
                             )
                         }
                     }

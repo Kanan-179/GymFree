@@ -13,5 +13,7 @@ data class WorkoutHistoryEntity(
     val durationSeconds: Int,
     val completedExercisesCount: Int,
     val totalExercisesCount: Int,
-    val notes: String = ""
+    val notes: String = "",
+    val totalVolumeKg: Double = 0.0,
+    val trainedMusclesJson: String = ""
 )
